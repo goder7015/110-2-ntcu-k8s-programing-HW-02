@@ -1,31 +1,28 @@
 package main
- 
+
 import (
-	"bufio"
 	"context"
 	"flag"
-	//"log"
 	"fmt"
 	"os"
-	"path/filepath"
-	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/util/homedir"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"os/signal"
 	"path"
 	"syscall"
 	"time"
+
+	appv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
 	namespace = "default"
 )
- 
+
 func main() {
 	outsideCluster := flag.Bool("outside-cluster", false, "set to true when run out of cluster. (default: false)")
 	flag.Parse()
@@ -59,7 +56,7 @@ func main() {
 		}
 	}
 
-	cm := createDeployment(clientset)
+	dm := createDeployment(clientset)
 	sm := createService(clientset)
 
 	go func() {
@@ -69,15 +66,15 @@ func main() {
 				Deployments(namespace).
 				Get(
 					context.Background(),
-					cm.GetName(),
+					dm.GetName(),
 					metav1.GetOptions{},
 				)
 			if err != nil {
 				panic(err.Error())
 			}
 
-			fmt.Printf("Read Pod %s/%s\n", namespace, read.GetName())
-			time.Sleep(5 * time.Second)
+			fmt.Printf("Read Deployment %s/%s\n", namespace, read.GetName())
+			time.Sleep(time.Second)
 		}
 	}()
 
@@ -86,62 +83,45 @@ func main() {
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	<-stopChan
 
-	//fmt.Printf("Delete Pod %s/%s ", namespace, cm.GetName())
-	deleteDeployment(clientset, cm)
+	fmt.Printf("Delete Deployment %s/%s ", namespace, dm.GetName())
+	deleteDeployment(clientset, dm)
+	fmt.Printf("Delete Service %s/%s ", namespace, sm.GetName())
 	deleteService(clientset, sm)
 }
- 
-func createDeployment(client kubernetes.Interface) *appsv1.Deployment {
-	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
 
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
+func int32Ptr(i int32) *int32 { return &i }
 
-	deploymentsClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
- 
-	// Create Deployment
-
-	deployment := &appsv1.Deployment{
+func createDeployment(client kubernetes.Interface) *appv1.Deployment {
+	dm := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ntcu-nginx",
+			Name: "apple-app1",
 			Labels: map[string]string{
 				"ntcu-k8s": "hw2",
-            },
+			},
 		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: int32Ptr(2),
+		Spec: appv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"ntcu-k8s": "hw2",
 				},
 			},
-			Template: apiv1.PodTemplateSpec{
+			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"ntcu-k8s": "hw2",
 					},
 				},
-				Spec: apiv1.PodSpec{
-					Containers: []apiv1.Container{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
 						{
-							Name:  "nginx",
-							Image: "nginx:1.12",
-							Ports: []apiv1.ContainerPort{
+							Name:  "nginx-container",
+							Image: "nginx:1.14.2",
+							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
-									Protocol:      apiv1.ProtocolTCP,
 									ContainerPort: 80,
+									Protocol:      corev1.ProtocolTCP,
 								},
 							},
 						},
@@ -150,91 +130,45 @@ func createDeployment(client kubernetes.Interface) *appsv1.Deployment {
 			},
 		},
 	}
-	fmt.Println("Creating deployment...")
-	result, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Created deployment %q.\n", result.GetObjectMeta().GetName())
-	return deployment
-}
+	dm.Namespace = namespace
 
-var portnum int32 = 80
-
-func createService(client kubernetes.Interface, ) *apiv1.Service {
-	var kubeconfig *string
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig2", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig2", "", "absolute path to the kubeconfig file")
-	}
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
- 
-	serviceClient := clientset.CoreV1().Services(apiv1.NamespaceDefault)
- 
-	// Create Deployment
-
-	service := &apiv1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "ntcu-nginx",
-			Labels: map[string]string{
-				"ntcu-k8s": "hw2",
-            },
-		},
-		Spec: apiv1.ServiceSpec{
-			Selector:  map[string]string{
-					"ntcu-k8s": "hw2",
-			},
-			Type: apiv1.ServiceTypeNodePort,
-            Ports: []apiv1.ServicePort{
-                {
-                    Name:       "http",
-					Port:       80,
-					TargetPort: intstr.IntOrString{IntVal: portnum},
-					NodePort:   30100,
-					Protocol:   apiv1.ProtocolTCP,
-                },
-            },
-		},
-	}
-	fmt.Println("Creating service...")
-	result, err := serviceClient.Create(context.TODO(), service, metav1.CreateOptions{})
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Created service %q.\n", result.GetObjectMeta().GetName())
-	return service
-}
-
-func deleteDeployment(client kubernetes.Interface, cm *appsv1.Deployment)  {
-	err := client.
+	dm, err := client.
 		AppsV1().
 		Deployments(namespace).
+		Create(
+			context.Background(),
+			dm,
+			metav1.CreateOptions{},
+		)
+	if err != nil {
+		panic(err.Error())
+	}
+	fmt.Printf("Created Deployment %s/%s\n", dm.GetNamespace(), dm.GetName())
+	return dm
+}
+
+func deleteDeployment(client kubernetes.Interface, dm *appv1.Deployment) {
+	err := client.
+		AppsV1().
+		Deployments(dm.GetNamespace()).
 		Delete(
 			context.Background(),
-			cm.GetName(),
+			dm.GetName(),
 			metav1.DeleteOptions{},
 		)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	fmt.Printf("Deleted Deployment %s/%s\n", cm.GetNamespace(), cm.GetName())
+	fmt.Printf("Deleted Deployment %s/%s\n", dm.GetNamespace(), dm.GetName())
 }
 
-func deleteService(client kubernetes.Interface, sm *apiv1.Service)  {
+func deleteService(client kubernetes.Interface, sm *corev1.Service) {
 	err := client.
 		CoreV1().
-		Services(namespace).
+		Services(sm.GetNamespace()).
 		Delete(
-			context.TODO(),
+			context.Background(),
 			sm.GetName(),
 			metav1.DeleteOptions{},
 		)
@@ -244,17 +178,44 @@ func deleteService(client kubernetes.Interface, sm *apiv1.Service)  {
 
 	fmt.Printf("Deleted Service %s/%s\n", sm.GetNamespace(), sm.GetName())
 }
- 
-func prompt() {
-	fmt.Printf("-> Press Return key to continue.")
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		break
+
+var portnum int32 = 80
+
+func createService(client kubernetes.Interface) *corev1.Service {
+	sm := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "apple-service",
+			Labels: map[string]string{
+				"ntcu-k8s": "hw2",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"ntcu-k8s": "hw2",
+			},
+			Type: corev1.ServiceTypeNodePort,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Port:       80,
+					TargetPort: intstr.IntOrString{IntVal: portnum},
+					NodePort:   30100,
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
 	}
-	if err := scanner.Err(); err != nil {
-		panic(err)
+	sm.Namespace = namespace
+	sm, err := client.
+		CoreV1().
+		Services(namespace).Create(
+		context.Background(),
+		sm,
+		metav1.CreateOptions{},
+	)
+	if err != nil {
+		panic(err.Error())
 	}
-	fmt.Println()
+	fmt.Printf("Created Deplyment %s/%s\n", sm.GetNamespace(), sm.GetName())
+	return sm
 }
- 
-func int32Ptr(i int32) *int32 { return &i }
