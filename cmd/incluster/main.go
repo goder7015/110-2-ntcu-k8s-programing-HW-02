@@ -199,7 +199,7 @@ func createService(client kubernetes.Interface, ) *apiv1.Service {
 					Port:       80,
 					TargetPort: intstr.IntOrString{IntVal: portnum},
 					NodePort:   30100,
-					Protocol:   corev1.ProtocolTCP,
+					Protocol:   apiv1.ProtocolTCP,
                 },
             },
 		},
