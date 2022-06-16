@@ -158,6 +158,8 @@ func createDeployment(client kubernetes.Interface) *appsv1.Deployment {
 	return deployment
 }
 
+var portnum int32 = 80
+
 func createService(client kubernetes.Interface, ) *apiv1.Service {
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
@@ -192,9 +194,11 @@ func createService(client kubernetes.Interface, ) *apiv1.Service {
 			Type: apiv1.ServiceTypeNodePort,
             Ports: []apiv1.ServicePort{
                 {
-                    Name:     "http",
-                    Port:     80,
-                    Protocol: apiv1.ProtocolTCP,
+                    Name:       "http",
+					Port:       80,
+					TargetPort: intstr.IntOrString{IntVal: portnum},
+					NodePort:   30100,
+					Protocol:   corev1.ProtocolTCP,
                 },
             },
 		},

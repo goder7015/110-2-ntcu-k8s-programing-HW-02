@@ -25,11 +25,13 @@ metadata:
   namespace: default
 rules:
   - apiGroups:
+      - "apps"
       - ""
     resources:
       - configmaps
+      - deployments
+      - services
     verbs:
       - get
       - create
       - delete
-
