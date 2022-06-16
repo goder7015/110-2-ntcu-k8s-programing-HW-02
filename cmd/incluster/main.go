@@ -94,7 +94,7 @@ func int32Ptr(i int32) *int32 { return &i }
 func createDeployment(client kubernetes.Interface) *appv1.Deployment {
 	dm := &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "apple-app1",
+			Name: "ntcu-nginx",
 			Labels: map[string]string{
 				"ntcu-k8s": "hw2",
 			},
