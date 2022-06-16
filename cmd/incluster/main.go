@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"os/signal"
 	"path"
 	"syscall"
